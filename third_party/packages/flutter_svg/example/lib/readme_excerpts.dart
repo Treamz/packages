@@ -131,3 +131,42 @@ Widget loadWithColorMapper() {
   // #enddocregion ColorMapper
   return svgIcon;
 }
+
+/// Plays an SVG that declares its own animation.
+Widget loadAnimatedAsset() {
+  // #docregion AnimatedAsset
+  const assetName = 'assets/animated/spinner.svg';
+  final Widget spinner = AnimatedSvgPicture.asset(assetName, width: 48, height: 48);
+  // #enddocregion AnimatedAsset
+  return spinner;
+}
+
+/// Plays an animated SVG once and holds its final frame.
+Widget loadAnimatedAssetOnce() {
+  // #docregion AnimatedAssetOnce
+  final Widget progress = AnimatedSvgPicture.asset(
+    'assets/animated/progress.svg',
+    width: 240,
+    repeat: false,
+    onCompleted: () => debugPrint('done'),
+  );
+  // #enddocregion AnimatedAssetOnce
+  return progress;
+}
+
+/// Drives an animated SVG from a controller, so that it can be paused and
+/// scrubbed.
+Widget loadControlledAnimatedAsset(AnimatedSvgController controller) {
+  // #docregion AnimatedAssetController
+  final Widget spinner = AnimatedSvgPicture.asset(
+    'assets/animated/spinner.svg',
+    width: 48,
+    height: 48,
+    controller: controller,
+    autoPlay: false,
+  );
+  // Later, in response to some event:
+  controller.play();
+  // #enddocregion AnimatedAssetController
+  return spinner;
+}

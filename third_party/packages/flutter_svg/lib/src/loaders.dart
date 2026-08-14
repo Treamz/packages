@@ -83,6 +83,9 @@ abstract class ColorMapper {
   ///
   /// The SVG parser will call this method every time it parses a color
   Color substitute(String? id, String elementName, String attributeName, Color color);
+
+  /// Creates a [vg.ColorMapper] from this.
+  vg.ColorMapper toVgColorMapper() => _DelegateVgColorMapper(this);
 }
 
 class _DelegateVgColorMapper extends vg.ColorMapper {
@@ -148,7 +151,7 @@ abstract class SvgLoader<T> extends BytesLoader {
               .encodeSvg(
                 xml: provideSvg(message),
                 theme: theme.toVgTheme(),
-                colorMapper: colorMapper == null ? null : _DelegateVgColorMapper(colorMapper!),
+                colorMapper: colorMapper?.toVgColorMapper(),
                 debugName: 'Svg loader',
                 enableClippingOptimizer: false,
                 enableMaskingOptimizer: false,
@@ -170,11 +173,58 @@ abstract class SvgLoader<T> extends BytesLoader {
     return svg.cache.putIfAbsent(cacheKey(context), () => _load(context));
   }
 
+  /// Loads the SVG source this loader provides, without compiling it.
+  ///
+  /// Most callers want [loadBytes], which produces the compiled vector graphic
+  /// that widgets draw. This is for callers that need to work with the markup
+  /// itself, such as [AnimatedSvgPicture], which has to resolve the animations
+  /// the markup declares before it can be compiled.
+  ///
+  /// The result carries the theme and color mapper that the source should be
+  /// compiled with, resolved the same way [loadBytes] resolves them.
+  Future<SvgSource> loadSvgSource(BuildContext? context) {
+    final SvgTheme theme = getTheme(context);
+    return prepareMessage(context).then((T? message) {
+      return compute(provideSvg, message, debugLabel: 'Load SVG source').then((String xml) {
+        return SvgSource(xml: xml, theme: theme, colorMapper: colorMapper);
+      });
+    });
+  }
+
   @override
   SvgCacheKey cacheKey(BuildContext? context) {
     final SvgTheme theme = getTheme(context);
     return SvgCacheKey(keyData: this, theme: theme, colorMapper: colorMapper);
   }
+}
+
+/// The SVG markup a loader provides, along with everything needed to compile
+/// it.
+///
+/// Returned by [SvgLoader.loadSvgSource].
+@immutable
+class SvgSource {
+  /// Creates a source description.
+  const SvgSource({required this.xml, required this.theme, required this.colorMapper});
+
+  /// The SVG markup.
+  final String xml;
+
+  /// The theme that resolves `currentColor` and font relative units.
+  final SvgTheme theme;
+
+  /// The color mapper to apply while compiling, if any.
+  final ColorMapper? colorMapper;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SvgSource &&
+      other.xml == xml &&
+      other.theme == theme &&
+      other.colorMapper == colorMapper;
+
+  @override
+  int get hashCode => Object.hash(xml, theme, colorMapper);
 }
 
 /// A [SvgTheme] aware cache key.

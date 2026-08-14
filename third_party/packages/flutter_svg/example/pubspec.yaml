@@ -25,6 +25,7 @@ flutter:
 
   assets:
     - assets/
+    - assets/animated/
     - assets/w3samples/
     - assets/deborah_ufw/
     - assets/simple/

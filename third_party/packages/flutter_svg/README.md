@@ -129,6 +129,76 @@ rendered into an `Image`, which is then drawn using drawImage. This approach may
 sacrifice some flexibility—especially around resolution scaling—but can
 significantly improve rendering performance in specific use cases.
 
+## Animated SVGs
+
+`AnimatedSvgPicture` plays SVGs that declare their own animation. It takes the
+same arguments as `SvgPicture` for sizing, alignment, theming, and error
+handling, and offers the same `asset`, `network`, `file`, `memory`, and `string`
+constructors.
+
+<?code-excerpt "example/lib/readme_excerpts.dart (AnimatedAsset)"?>
+```dart
+const assetName = 'assets/animated/spinner.svg';
+final Widget spinner = AnimatedSvgPicture.asset(assetName, width: 48, height: 48);
+```
+
+By default the animation starts as soon as it loads and repeats forever. To play
+it once and hold the final frame:
+
+<?code-excerpt "example/lib/readme_excerpts.dart (AnimatedAssetOnce)"?>
+```dart
+final Widget progress = AnimatedSvgPicture.asset(
+  'assets/animated/progress.svg',
+  width: 240,
+  repeat: false,
+  onCompleted: () => debugPrint('done'),
+);
+```
+
+Pass an `AnimatedSvgController` to drive playback yourself. The controller can be
+used before the picture has loaded; requests are applied once it is ready.
+
+<?code-excerpt "example/lib/readme_excerpts.dart (AnimatedAssetController)"?>
+```dart
+final Widget spinner = AnimatedSvgPicture.asset(
+  'assets/animated/spinner.svg',
+  width: 48,
+  height: 48,
+  controller: controller,
+  autoPlay: false,
+);
+// Later, in response to some event:
+controller.play();
+```
+
+### What is supported
+
+- The SMIL elements `<animate>`, `<animateTransform>`, `<animateMotion>`, and
+  `<set>`, including `values`/`keyTimes`/`keySplines`, `from`/`to`/`by`,
+  `calcMode`, `begin`, `dur`, `end`, `repeatCount`, `repeatDur`, `fill`,
+  `additive`, and `accumulate`.
+- CSS `@keyframes` in a `<style>` element, driven by the `animation` shorthand or
+  its longhand properties, including `transform-origin` resolved against the view
+  box.
+
+Animations that need a live, interactive document are ignored rather than
+guessed at: a `begin` that waits for an event or for another animation, and CSS
+pseudo-class selectors such as `:hover`. Interpolating the `d` attribute is not
+supported either; those animations switch between values instead of morphing.
+
+`AnimatedSvgPicture` also resolves the CSS in a `<style>` element into
+presentation attributes, which is what makes stylesheet-driven SVGs render at
+all. `SvgPicture` is unchanged and still ignores `<style>`.
+
+### Performance
+
+Loading an animated SVG compiles one vector graphic per frame, so it costs more
+than loading a static SVG and holds the compiled frames in `svg.animationCache`
+for as long as they are in use. Drawing each frame then costs the same as
+drawing a static SVG. Use `frameRate` to trade smoothness against both, and
+`placeholderBuilder` to show something while the animation compiles. An SVG with
+no animation compiles to a single frame and starts no ticker.
+
 ## Precompiling and Optimizing SVGs
 
 The vector_graphics backend supports SVG compilation which produces a binary

@@ -1,5 +1,12 @@
-## NEXT
+## 2.4.0
 
+* Adds `AnimatedSvgPicture`, which plays SVGs that declare SMIL animation
+  (`<animate>`, `<animateTransform>`, `<animateMotion>`, `<set>`) or CSS
+  `@keyframes` animation, along with `AnimatedSvgController` for driving
+  playback and `svg.animationCache` for the compiled frames.
+* Adds `SvgLoader.loadSvgSource`, which provides the SVG markup a loader holds
+  without compiling it.
+* Adds `ColorMapper.toVgColorMapper`.
 * Updates minimum supported SDK version to Flutter 3.38/Dart 3.10.
 
 ## 2.3.0

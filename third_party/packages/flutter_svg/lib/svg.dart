@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:vector_graphics/vector_graphics_compat.dart';
 
+import 'src/animation/cache.dart';
 import 'src/cache.dart';
 import 'src/loaders.dart';
 import 'src/utilities/file.dart';
@@ -12,6 +13,9 @@ import 'src/utilities/file.dart';
 export 'package:vector_graphics/vector_graphics.dart'
     show BytesLoader, PictureInfo, VectorGraphicUtilities, vg;
 
+export 'src/animated_svg.dart';
+export 'src/animation/cache.dart';
+export 'src/animation/frames.dart' show defaultAnimationFrameRate, defaultMaxAnimationFrames;
 export 'src/cache.dart';
 export 'src/default_theme.dart';
 export 'src/loaders.dart';
@@ -45,6 +49,13 @@ class Svg {
 
   /// The cache instance for decoded SVGs.
   final Cache cache = Cache();
+
+  /// The cache instance for compiled animated SVGs.
+  ///
+  /// Used by [AnimatedSvgPicture]. Entries are much larger than the ones in
+  /// [cache], because an animation holds one compiled vector graphic per frame,
+  /// so this cache holds fewer of them.
+  final AnimationCache animationCache = AnimationCache();
 }
 
 // ignore: avoid_classes_with_only_static_members
