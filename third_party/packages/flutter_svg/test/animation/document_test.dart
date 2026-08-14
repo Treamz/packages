@@ -229,6 +229,21 @@ void main() {
       expect(attributeAt(document, const Duration(seconds: 1), 'a', 'transform'), 'rotate(90)');
     });
 
+    test('drops transform arguments the compiler would reject', () {
+      final document = AnimatedSvgDocument.parse(
+        svgWith('''
+          <rect id="a" width="10" height="10">
+            <animateTransform attributeName="transform" type="rotate"
+                from="0 50 50 0" to="360 50 50 0" dur="4s" repeatCount="indefinite"/>
+          </rect>
+        '''),
+      );
+      expect(
+        attributeAt(document, const Duration(seconds: 1), 'a', 'transform'),
+        'rotate(90 50 50)',
+      );
+    });
+
     test('accumulates across repeats', () {
       final document = AnimatedSvgDocument.parse(
         svgWith('''
@@ -273,6 +288,40 @@ void main() {
       );
       final String? transform = attributeAt(document, const Duration(seconds: 2), 'a', 'transform');
       expect(transform, startsWith('translate(50'));
+    });
+
+    test('keeps moving across a corner when the heading tracks the path', () {
+      final document = AnimatedSvgDocument.parse(
+        svgWith('''
+          <rect id="a" width="4" height="4">
+            <animateMotion path="M0 0 L100 0 L100 100" dur="4s" rotate="auto"
+                repeatCount="indefinite"/>
+          </rect>
+        '''),
+      );
+      expect(
+        attributeAt(document, const Duration(milliseconds: 1000), 'a', 'transform'),
+        'translate(50 0) rotate(0)',
+      );
+      expect(
+        attributeAt(document, const Duration(milliseconds: 3000), 'a', 'transform'),
+        'translate(100 50) rotate(90)',
+      );
+
+      // The corner is halfway along the path, where the heading passes through
+      // zero. Every sample carries a rotation, even the ones on the horizontal
+      // leg, so neighbouring keyframes stay interpolable and the motion keeps
+      // advancing instead of holding one sample until the heading changes.
+      final aroundCorner = <String?>[
+        for (final int ms in <int>[1900, 1950, 2000, 2050, 2100])
+          attributeAt(document, Duration(milliseconds: ms), 'a', 'transform'),
+      ];
+      expect(aroundCorner.every((String? transform) => transform!.contains('rotate(')), isTrue);
+      expect(
+        aroundCorner.toSet().length,
+        aroundCorner.length,
+        reason: 'the motion should advance on every sample, not stall at the corner',
+      );
     });
 
     test('composes in front of the transform the element already has', () {

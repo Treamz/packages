@@ -324,13 +324,16 @@ class SvgFileLoader extends SvgLoader<void> {
     return utf8.decode(bytes, allowMalformed: true);
   }
 
+  // Compares by path rather than by [File], which does not define value
+  // equality. Without this, a loader created in a build method is never equal
+  // to the one it replaces, so nothing it loads is ever served from the cache.
   @override
-  int get hashCode => Object.hash(file, theme, colorMapper);
+  int get hashCode => Object.hash(file.path, theme, colorMapper);
 
   @override
   bool operator ==(Object other) {
     return other is SvgFileLoader &&
-        other.file == file &&
+        other.file.path == file.path &&
         other.theme == theme &&
         other.colorMapper == colorMapper;
   }

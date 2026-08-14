@@ -7,6 +7,9 @@
 * Adds `SvgLoader.loadSvgSource`, which provides the SVG markup a loader holds
   without compiling it.
 * Adds `ColorMapper.toVgColorMapper`.
+* Fixes `SvgFileLoader` equality, which compared `File` objects. `File` does not
+  define value equality, so a loader created in a build method never matched the
+  one it replaced and nothing it loaded was served from the cache.
 * Updates minimum supported SDK version to Flutter 3.38/Dart 3.10.
 
 ## 2.3.0

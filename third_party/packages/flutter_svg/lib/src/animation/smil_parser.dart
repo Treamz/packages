@@ -182,6 +182,12 @@ SvgAttributeAnimation? _parseMotion(
 
   final String rotate = attributeByLocalName(element, 'rotate')?.trim() ?? '0';
   final double? fixedRotation = double.tryParse(rotate);
+  // A heading that tracks the path passes through zero on any horizontal
+  // stretch. The rotation is written out even then, so that every keyframe has
+  // the same shape and can be interpolated; dropping it would make the samples
+  // either side of such a stretch incompatible, and the motion would step
+  // rather than move.
+  final bool tracksPath = rotate == 'auto' || rotate == 'auto-reverse';
   final values = <AnimatableValue>[];
   for (var i = 0; i < _motionPathSamples; i += 1) {
     final MotionPathSample sample = path.sampleAtFraction(i / (_motionPathSamples - 1));
@@ -193,7 +199,7 @@ SvgAttributeAnimation? _parseMotion(
     values.add(
       TransformListValue(<TransformValue>[
         TransformValue('translate', <double>[sample.x, sample.y]),
-        if (angle != 0) TransformValue('rotate', <double>[angle]),
+        if (tracksPath || angle != 0) TransformValue('rotate', <double>[angle]),
       ]),
     );
   }

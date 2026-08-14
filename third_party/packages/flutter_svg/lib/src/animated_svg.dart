@@ -22,8 +22,10 @@ import 'utilities/file.dart';
 /// it is no longer needed.
 class AnimatedSvgController extends ChangeNotifier {
   AnimationController? _playback;
+  final ProxyAnimation _progress = ProxyAnimation(kAlwaysDismissedAnimation);
   bool? _playRequested;
   double? _seekRequested;
+  Duration? _seekPositionRequested;
   bool _disposed = false;
 
   /// Whether the picture this controller drives has finished loading.
@@ -42,8 +44,10 @@ class AnimatedSvgController extends ChangeNotifier {
   /// How far through the animation playback is, from 0.0 to 1.0.
   ///
   /// This is a repainting [Animation], so it can be passed to widgets such as
-  /// [AnimatedBuilder] to follow the animation frame by frame.
-  Animation<double> get progress => _playback ?? kAlwaysDismissedAnimation;
+  /// [AnimatedBuilder] to follow the animation frame by frame. The same object
+  /// is returned for the life of the controller, so it may be handed out before
+  /// the picture has loaded; it starts reporting once playback begins.
+  Animation<double> get progress => _progress;
 
   /// The current position within the animation.
   Duration get position {
@@ -83,6 +87,7 @@ class AnimatedSvgController extends ChangeNotifier {
   void stop() {
     _playRequested = false;
     _seekRequested = 0;
+    _seekPositionRequested = null;
     _playback
       ?..stop()
       ..value = 0;
@@ -95,6 +100,7 @@ class AnimatedSvgController extends ChangeNotifier {
   void seek(double progress) {
     final double clamped = progress.clamp(0.0, 1.0);
     _seekRequested = clamped;
+    _seekPositionRequested = null;
     _playback?.value = clamped;
   }
 
@@ -102,7 +108,10 @@ class AnimatedSvgController extends ChangeNotifier {
   void seekTo(Duration position) {
     final Duration? total = duration;
     if (total == null || total <= Duration.zero) {
-      _seekRequested = 0;
+      // The duration is only known once the animation has loaded, so the
+      // position is held until then rather than being resolved against nothing.
+      _seekPositionRequested = position;
+      _seekRequested = null;
       return;
     }
     seek(position.inMicroseconds / total.inMicroseconds);
@@ -112,9 +121,18 @@ class AnimatedSvgController extends ChangeNotifier {
 
   void _attach(AnimationController playback, {required bool repeat, required bool autoPlay}) {
     _playback = playback;
+    _progress.parent = playback;
     _repeats = repeat;
+    final Duration? seekPosition = _seekPositionRequested;
     final double? seek = _seekRequested;
-    if (seek != null) {
+    if (seekPosition != null) {
+      final Duration? total = playback.duration;
+      playback.value = total == null || total <= Duration.zero
+          ? 0
+          : (seekPosition.inMicroseconds / total.inMicroseconds).clamp(0.0, 1.0);
+      _seekPositionRequested = null;
+      _seekRequested = playback.value;
+    } else if (seek != null) {
       playback.value = seek;
     }
     if (_playRequested ?? autoPlay) {
@@ -126,6 +144,7 @@ class AnimatedSvgController extends ChangeNotifier {
 
   void _detach() {
     _playback = null;
+    _progress.parent = null;
   }
 
   void _notify() {
@@ -138,6 +157,7 @@ class AnimatedSvgController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _playback = null;
+    _progress.parent = null;
     super.dispose();
   }
 }
@@ -181,8 +201,9 @@ class AnimatedSvgController extends ChangeNotifier {
 /// Animations that need a live document are not supported, because there is no
 /// interactive document to drive them: a `begin` that waits for an event or for
 /// another animation, and CSS pseudo-class selectors such as `:hover`, are
-/// ignored rather than guessed at. Interpolation of the `d` attribute is also
-/// not supported; such animations fall back to switching between values.
+/// ignored rather than guessed at. So are CSS custom properties and the `var()`
+/// values that reference them. Interpolation of the `d` attribute is also not
+/// supported; such animations fall back to switching between values.
 class AnimatedSvgPicture extends StatefulWidget {
   /// Renders the animated SVG that `bytesLoader` provides.
   ///
@@ -207,7 +228,7 @@ class AnimatedSvgPicture extends StatefulWidget {
     this.renderingStrategy = RenderingStrategy.picture,
     this.controller,
     this.autoPlay = true,
-    this.repeat = true,
+    this.repeat,
     this.onCompleted,
     this.frameRate = defaultAnimationFrameRate,
     this.maxFrames = defaultMaxAnimationFrames,
@@ -240,7 +261,7 @@ class AnimatedSvgPicture extends StatefulWidget {
     this.renderingStrategy = RenderingStrategy.picture,
     this.controller,
     this.autoPlay = true,
-    this.repeat = true,
+    this.repeat,
     this.onCompleted,
     this.frameRate = defaultAnimationFrameRate,
     this.maxFrames = defaultMaxAnimationFrames,
@@ -280,7 +301,7 @@ class AnimatedSvgPicture extends StatefulWidget {
     this.renderingStrategy = RenderingStrategy.picture,
     this.controller,
     this.autoPlay = true,
-    this.repeat = true,
+    this.repeat,
     this.onCompleted,
     this.frameRate = defaultAnimationFrameRate,
     this.maxFrames = defaultMaxAnimationFrames,
@@ -319,7 +340,7 @@ class AnimatedSvgPicture extends StatefulWidget {
     this.renderingStrategy = RenderingStrategy.picture,
     this.controller,
     this.autoPlay = true,
-    this.repeat = true,
+    this.repeat,
     this.onCompleted,
     this.frameRate = defaultAnimationFrameRate,
     this.maxFrames = defaultMaxAnimationFrames,
@@ -349,7 +370,7 @@ class AnimatedSvgPicture extends StatefulWidget {
     this.renderingStrategy = RenderingStrategy.picture,
     this.controller,
     this.autoPlay = true,
-    this.repeat = true,
+    this.repeat,
     this.onCompleted,
     this.frameRate = defaultAnimationFrameRate,
     this.maxFrames = defaultMaxAnimationFrames,
@@ -379,7 +400,7 @@ class AnimatedSvgPicture extends StatefulWidget {
     this.renderingStrategy = RenderingStrategy.picture,
     this.controller,
     this.autoPlay = true,
-    this.repeat = true,
+    this.repeat,
     this.onCompleted,
     this.frameRate = defaultAnimationFrameRate,
     this.maxFrames = defaultMaxAnimationFrames,
@@ -455,10 +476,11 @@ class AnimatedSvgPicture extends StatefulWidget {
 
   /// Whether the animation restarts when it reaches the end.
   ///
-  /// Defaults to true, which matches how an SVG with `repeatCount="indefinite"`
-  /// behaves in a browser. Set this to false to play the animation once and
-  /// hold its final frame.
-  final bool repeat;
+  /// Defaults to null, meaning the SVG decides: markup that asks to repeat
+  /// forever, such as `repeatCount="indefinite"` or a CSS `infinite` iteration
+  /// count, loops, and markup whose animations all end plays once and holds its
+  /// final frame. Set this to true or false to override that.
+  final bool? repeat;
 
   /// Called each time playback reaches the end of the animation.
   ///
@@ -493,7 +515,7 @@ class AnimatedSvgPicture extends StatefulWidget {
       ..add(DoubleProperty('frameRate', frameRate, defaultValue: defaultAnimationFrameRate))
       ..add(IntProperty('maxFrames', maxFrames, defaultValue: defaultMaxAnimationFrames))
       ..add(DiagnosticsProperty<bool>('autoPlay', autoPlay, defaultValue: true))
-      ..add(DiagnosticsProperty<bool>('repeat', repeat, defaultValue: true))
+      ..add(DiagnosticsProperty<bool>('repeat', repeat, defaultValue: null))
       ..add(
         DiagnosticsProperty<AlignmentGeometry>(
           'alignment',
@@ -553,15 +575,17 @@ class _AnimatedSvgPictureState extends State<AnimatedSvgPicture> with TickerProv
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?._detach();
       final AnimationController? playback = _playback;
-      if (playback != null) {
-        widget.controller?._attach(playback, repeat: widget.repeat, autoPlay: widget.autoPlay);
+      if (playback != null && _frames != null) {
+        widget.controller?._attach(playback, repeat: _repeats(_frames!), autoPlay: widget.autoPlay);
       }
     }
-    if (oldWidget.repeat != widget.repeat) {
-      widget.controller?._repeats = widget.repeat;
+    final AnimatedSvgFrames? frames = _frames;
+    if (oldWidget.repeat != widget.repeat && frames != null) {
+      final bool repeats = _repeats(frames);
+      widget.controller?._repeats = repeats;
       final AnimationController? playback = _playback;
       if (playback != null && playback.isAnimating) {
-        if (widget.repeat) {
+        if (repeats) {
           playback.repeat();
         } else {
           playback.forward();
@@ -621,6 +645,11 @@ class _AnimatedSvgPictureState extends State<AnimatedSvgPicture> with TickerProv
       if (!mounted || generation != _loadGeneration) {
         return;
       }
+      if (identical(frames, _frames) && _error == null) {
+        // The reload resolved to the animation that is already playing, so it
+        // keeps playing rather than jumping back to its first frame.
+        return;
+      }
       setState(() {
         _error = null;
         _stackTrace = null;
@@ -640,6 +669,8 @@ class _AnimatedSvgPictureState extends State<AnimatedSvgPicture> with TickerProv
     }
   }
 
+  bool _repeats(AnimatedSvgFrames frames) => widget.repeat ?? frames.loops;
+
   void _startPlayback(AnimatedSvgFrames frames) {
     _disposePlayback();
     if (!frames.isAnimated) {
@@ -652,9 +683,9 @@ class _AnimatedSvgPictureState extends State<AnimatedSvgPicture> with TickerProv
     _playback = playback;
     final AnimatedSvgController? controller = widget.controller;
     if (controller != null) {
-      controller._attach(playback, repeat: widget.repeat, autoPlay: widget.autoPlay);
+      controller._attach(playback, repeat: _repeats(frames), autoPlay: widget.autoPlay);
     } else if (widget.autoPlay) {
-      if (widget.repeat) {
+      if (_repeats(frames)) {
         playback.repeat();
       } else {
         playback.forward();

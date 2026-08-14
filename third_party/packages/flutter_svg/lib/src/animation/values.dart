@@ -409,6 +409,19 @@ class TransformValue extends AnimatableValue {
   /// Creates a transform of the given [type] with [parameters].
   const TransformValue(this.type, this.parameters);
 
+  /// Creates a transform, dropping any arguments beyond what [type] takes.
+  ///
+  /// The SVG parser these values are handed to rejects an over-long argument
+  /// list outright, so an SVG that writes one renders with the extra arguments
+  /// ignored rather than failing altogether.
+  factory TransformValue.truncated(String type, List<double> parameters) {
+    final int limit = canonicalLength(type);
+    return TransformValue(
+      type,
+      parameters.length <= limit ? parameters : parameters.sublist(0, limit),
+    );
+  }
+
   /// Parses the parameter list of an `<animateTransform>` value, such as
   /// `360 50 50` for `type="rotate"`.
   static TransformValue? parse(String type, String raw) {
@@ -416,24 +429,13 @@ class TransformValue extends AnimatableValue {
     if (numbers == null || numbers.unit.isNotEmpty) {
       return null;
     }
-    return TransformValue(type, numbers.numbers);
+    return TransformValue.truncated(type, numbers.numbers);
   }
 
-  /// The transform function name, one of `translate`, `scale`, `rotate`,
-  /// `skewX`, `skewY`, or `matrix`.
-  final String type;
-
-  /// The arguments to the transform function.
-  final List<double> parameters;
-
-  /// The number of arguments this transform type takes when fully specified.
-  ///
-  /// Missing arguments are supplied as defaults by the SVG specification, so
-  /// two values of the same type may be written with different lengths.
-  static int _canonicalLength(String type) {
+  /// The most arguments a transform of the given type accepts.
+  static int canonicalLength(String type) {
     switch (type) {
       case 'translate':
-        return 2;
       case 'scale':
         return 2;
       case 'rotate':
@@ -445,20 +447,27 @@ class TransformValue extends AnimatableValue {
     }
   }
 
+  /// The transform function name, one of `translate`, `scale`, `rotate`,
+  /// `skewX`, `skewY`, or `matrix`.
+  final String type;
+
+  /// The arguments to the transform function.
+  final List<double> parameters;
+
   /// The parameter list padded out to [length] so that values written with
   /// different arities, such as `rotate(0)` and `rotate(360 50 50)`, can be
   /// combined.
   ///
-  /// The result is never longer than the transform type allows, so combining
-  /// two equally short values does not spell out arguments that neither of them
-  /// wrote.
+  /// Callers pass the longer of the two lengths involved, so combining two
+  /// equally short values does not spell out arguments that neither of them
+  /// wrote, and a value carrying more arguments than its transform type calls
+  /// for is padded rather than rejected.
   List<double> _paddedTo(int length) {
-    final int target = length.clamp(parameters.length, _canonicalLength(type));
-    if (parameters.length >= target) {
+    if (parameters.length >= length) {
       return parameters;
     }
     return <double>[
-      for (var i = 0; i < target; i += 1)
+      for (var i = 0; i < length; i += 1)
         if (i < parameters.length)
           parameters[i]
         // `scale(2)` is shorthand for `scale(2 2)`; every other transform
@@ -594,7 +603,7 @@ class TransformListValue extends AnimatableValue {
       case 'skewX':
       case 'skewY':
       case 'matrix':
-        return <TransformValue>[TransformValue(name, arguments)];
+        return <TransformValue>[TransformValue.truncated(name, arguments)];
       case 'translateX':
         return <TransformValue>[
           TransformValue('translate', <double>[arguments[0], 0]),
@@ -612,7 +621,7 @@ class TransformListValue extends AnimatableValue {
           TransformValue('scale', <double>[1, arguments[0]]),
         ];
       case 'rotateZ':
-        return <TransformValue>[TransformValue('rotate', arguments)];
+        return <TransformValue>[TransformValue.truncated('rotate', arguments)];
       case 'skew':
         return <TransformValue>[
           TransformValue('skewX', <double>[arguments[0]]),

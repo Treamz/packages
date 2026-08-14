@@ -122,6 +122,27 @@ void main() {
       expect(from.lerp(to, 0.5)!.toAttributeValue(), 'rotate(180 25 25)');
     });
 
+    test('drops arguments past what the transform type accepts', () {
+      // The SVG parser these values feed rejects an over-long argument list, so
+      // the extra arguments are dropped rather than failing the whole picture.
+      expect(
+        TransformListValue.parse('rotate(45 50 50 99)')!.toAttributeValue(),
+        'rotate(45 50 50)',
+      );
+      expect(TransformListValue.parse('translate(1 2 3)')!.toAttributeValue(), 'translate(1 2)');
+
+      final AnimatableValue from = TransformListValue.parse('rotate(0 50 50 0)')!;
+      final AnimatableValue to = TransformListValue.parse('rotate(360 50 50)')!;
+      expect(from.lerp(to, 0.5)!.toAttributeValue(), 'rotate(180 50 50)');
+      expect(from.distanceTo(to), isNotNull);
+      expect(
+        TransformListValue.parse(
+          'translate(1 2 3)',
+        )!.add(TransformListValue.parse('translate(4 5 6)')!)!.toAttributeValue(),
+        'translate(5 7)',
+      );
+    });
+
     test('composes by concatenation', () {
       final AnimatableValue base = TransformListValue.parse('translate(5 5)')!;
       final AnimatableValue added = TransformListValue.parse('rotate(90)')!;

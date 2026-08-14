@@ -238,13 +238,32 @@ Map<String, String> _flattenStyle(XmlElement element, CssStylesheet stylesheet) 
   }
   final Map<String, String> declarations = stylesheet.declarationsFor(element);
   for (final MapEntry<String, String> entry in declarations.entries) {
-    if (nonPresentationProperties.contains(entry.key)) {
-      continue;
+    if (_canWriteAsAttribute(entry.key, entry.value)) {
+      element.setAttribute(entry.key, entry.value);
     }
-    element.setAttribute(entry.key, entry.value);
   }
   element.removeAttribute('style');
   return declarations;
+}
+
+/// A name that XML allows for an attribute.
+///
+/// CSS property names are ASCII, so this only has to cover the ASCII part of
+/// the XML `Name` production.
+final RegExp _xmlAttributeName = RegExp(r'^[A-Za-z_:][A-Za-z0-9_:.-]*$');
+
+/// Whether a resolved declaration can be written back as a presentation
+/// attribute.
+///
+/// Declarations that cannot be are left out rather than written anyway: a CSS
+/// custom property is not a legal XML attribute name and would make the sampled
+/// markup unparseable, and a value that references one cannot be resolved here,
+/// so writing it would replace an attribute the compiler understands with one
+/// it does not.
+bool _canWriteAsAttribute(String property, String value) {
+  return !nonPresentationProperties.contains(property) &&
+      _xmlAttributeName.hasMatch(property) &&
+      !value.contains('var(');
 }
 
 class _DocumentTiming {

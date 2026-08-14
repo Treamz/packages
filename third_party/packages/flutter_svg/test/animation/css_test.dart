@@ -113,6 +113,30 @@ void main() {
       expect(attributeAt(document, Duration.zero, 'a', 'style'), isNull);
     });
 
+    test('leaves out custom properties, which are not legal attribute names', () {
+      final document = AnimatedSvgDocument.parse(
+        svgWith('''
+          <style>.a { --brand: #ff0000; fill: #00ff00 }</style>
+          <rect id="a" class="a" width="10" height="10"/>
+        '''),
+      );
+      final String frame = document.sampleAt(Duration.zero);
+      expect(frame, isNot(contains('--brand')));
+      expect(attributeAt(document, Duration.zero, 'a', 'fill'), '#00ff00');
+      // The frame has to survive a round trip through the compiler's parser.
+      expect(() => XmlDocument.parse(frame), returnsNormally);
+    });
+
+    test('leaves an attribute alone when the CSS value references a variable', () {
+      final document = AnimatedSvgDocument.parse(
+        svgWith('''
+          <style>.a { fill: var(--brand, #00ff00) }</style>
+          <rect id="a" class="a" fill="#ff0000" width="10" height="10"/>
+        '''),
+      );
+      expect(attributeAt(document, Duration.zero, 'a', 'fill'), '#ff0000');
+    });
+
     test('lets an important rule win over an inline style', () {
       final document = AnimatedSvgDocument.parse(
         svgWith('''

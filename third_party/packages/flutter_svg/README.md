@@ -142,8 +142,9 @@ const assetName = 'assets/animated/spinner.svg';
 final Widget spinner = AnimatedSvgPicture.asset(assetName, width: 48, height: 48);
 ```
 
-By default the animation starts as soon as it loads and repeats forever. To play
-it once and hold the final frame:
+By default the animation starts as soon as it loads, and the SVG decides whether
+it repeats: markup that asks to loop forever does, and markup whose animations
+all end plays once and holds its final frame. Pass `repeat` to override that:
 
 <?code-excerpt "example/lib/readme_excerpts.dart (AnimatedAssetOnce)"?>
 ```dart
@@ -183,7 +184,9 @@ controller.play();
 
 Animations that need a live, interactive document are ignored rather than
 guessed at: a `begin` that waits for an event or for another animation, and CSS
-pseudo-class selectors such as `:hover`. Interpolating the `d` attribute is not
+pseudo-class selectors such as `:hover`. CSS custom properties and the `var()`
+values that reference them are left out, so an element keeps whatever
+presentation attribute it already had. Interpolating the `d` attribute is not
 supported either; those animations switch between values instead of morphing.
 
 `AnimatedSvgPicture` also resolves the CSS in a `<style>` element into

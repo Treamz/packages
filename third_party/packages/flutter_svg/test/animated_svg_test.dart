@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -242,6 +243,50 @@ void main() {
     expect(_frameLoader(tester).frames.frames.length, 8);
   });
 
+  testWidgets('follows the document when repeat is not given', (WidgetTester tester) async {
+    // The spinner repeats forever, so it loops.
+    await tester.pumpWidget(
+      AnimatedSvgPicture.string(_spinner, frameRate: 4, width: 100, height: 100),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 750));
+    expect(_frameIndex(tester), 3);
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(_frameIndex(tester), 0, reason: 'an indefinite animation should loop');
+
+    // The one-shot animation ends, so it plays once and holds its last frame.
+    await tester.pumpWidget(
+      AnimatedSvgPicture.string(_oneShot, frameRate: 4, width: 100, height: 100),
+    );
+    await tester.pumpAndSettle();
+    expect(_frameIndex(tester), 3, reason: 'an animation that ends should not loop');
+  });
+
+  testWidgets('keeps playing when a reload resolves to the same frames', (
+    WidgetTester tester,
+  ) async {
+    final Directory directory = Directory.systemTemp.createTempSync('flutter_svg_test');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final file = File('${directory.path}/spinner.svg')..writeAsStringSync(_spinner);
+
+    await tester.pumpWidget(
+      AnimatedSvgPicture.file(File(file.path), frameRate: 4, width: 100, height: 100),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(_frameIndex(tester), 2);
+
+    // A rebuild that constructs an equivalent loader must neither recompile the
+    // animation nor send playback back to the start.
+    await tester.pumpWidget(
+      AnimatedSvgPicture.file(File(file.path), frameRate: 4, width: 100, height: 100),
+    );
+    await tester.pump();
+
+    expect(_frameIndex(tester), 2);
+    expect(svg.animationCache.count, 1);
+  });
+
   group('AnimatedSvgController', () {
     testWidgets('pauses, seeks, and resumes', (WidgetTester tester) async {
       final controller = AnimatedSvgController();
@@ -302,6 +347,55 @@ void main() {
 
       expect(controller.isPlaying, isFalse);
       expect(_frameIndex(tester), 2);
+    });
+
+    testWidgets('honors a seekTo issued before the animation loads', (WidgetTester tester) async {
+      final controller = AnimatedSvgController();
+      addTearDown(controller.dispose);
+      controller.pause();
+      controller.seekTo(const Duration(milliseconds: 500));
+
+      await tester.pumpWidget(
+        AnimatedSvgPicture.string(
+          _spinner,
+          frameRate: 4,
+          width: 100,
+          height: 100,
+          controller: controller,
+        ),
+      );
+      await tester.pump();
+
+      expect(controller.position, const Duration(milliseconds: 500));
+      expect(_frameIndex(tester), 2);
+    });
+
+    testWidgets('exposes a progress animation that works before loading', (
+      WidgetTester tester,
+    ) async {
+      final controller = AnimatedSvgController();
+      addTearDown(controller.dispose);
+      // Captured before the picture exists, as a caller building a widget tree
+      // in one pass would.
+      final Animation<double> progress = controller.progress;
+      var ticks = 0;
+      progress.addListener(() => ticks += 1);
+
+      await tester.pumpWidget(
+        AnimatedSvgPicture.string(
+          _spinner,
+          frameRate: 4,
+          width: 100,
+          height: 100,
+          controller: controller,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(identical(controller.progress, progress), isTrue);
+      expect(ticks, greaterThan(0));
+      expect(progress.value, greaterThan(0));
     });
 
     testWidgets('survives being disposed while the picture is still mounted', (
